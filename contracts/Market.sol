@@ -3,50 +3,55 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "./CICToken.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
-contract DEX {
+contract Market {
 
     using SafeERC20 for IERC20;
 
-    event Bought(uint256 amount);
-    event Sold(uint256 amount);
+    event TradeStatusChange(uint256 trade, string status);
 
-    // CICToken
-    IERC20 public token;
+    IERC20 public currencyToken;
+    IERC721 public itemToken;
+    uint256 public tradeCounter;
 
-    constructor() {
-        token = new CICToken();
+    struct Trade {
+        address poster;
+        uint256 item;
+        uint256 price;
+        bytes32 status; // Open, Executed, Cancelled
     }
 
-    // The return value is token's address in javascript side.
-    function getTokenAddress() public view returns (IERC20) {
-        return token;
+    mapping(uint256 => Trade) public trades;
+
+    constructor(address _currencyTokenAddress, address _itemTokenAddress) {
+        currencyToken = IERC20(_currencyTokenAddress);
+        itemToken = IERC721(_itemTokenAddress);
+        tradeCounter = 0;
     }
 
-    function buy() public payable {
-        uint256 amountToBuy = msg.value;
-        uint256 dexBalance = token.balanceOf(address(this));
-
-        require(amountToBuy > 0, "You need to send some ether");
-        require(dexBalance >= amountToBuy, "Not enough tokens in the reserve");
-
-        // transfer tokens from smart contract to msg sender
-        token.safeTransfer(msg.sender, amountToBuy);
-        emit Bought(amountToBuy);
+    function openTrade(uint256 _item, uint256 _price) public {
+        itemToken.transferFrom(msg.sender, address(this), _item);
+        trades[tradeCounter] = Trade(msg.sender, _item, _price, "Open");
+        tradeCounter++;
+        emit TradeStatusChange(tradeCounter - 1, "Open");
     }
 
-    function sell(uint256 _amount) public {
-        require(_amount > 0, "You need to sell at least some tokens");
+    function executeTrade(uint256 _tradeId) public {
+        Trade memory trade = trades[_tradeId];
+        require(trade.status == "Open", "Trade is not open.");
+        currencyToken.safeTransferFrom(msg.sender, trade.poster, trade.price);
+        itemToken.transfer(msg.sender, trade.item);
+        trades[_tradeId].status = "Executed";
+        emit TradeStatusChange(_tradeId, "Executed");
+    }
 
-        uint256 allowance = token.allowance(msg.sender, address(this));
-        require(allowance >= _amount, "Check the token allowance");
-
-        // transfer tokens from msg sender to smart contract
-        token.safeTransferFrom(msg.sender, address(this), _amount);
-
-        // transfer ether to msg sender
-        payable(msg.sender).transfer(_amount);
-        emit Sold(_amount);
+    function cancelTrade(uint256 _tradeId) public {
+        Trade memory trade = trades[_tradeId];
+        require(msg.sender == trade.poster, "Trade can be cancelled only by poster.");
+        require(trade.status == "Open", "Trade is not open.");
+        itemToken.transfer(trade.poster, trade.item);
+        trades[_tradeId].status = "Cancelled";
+        emit TradeStatusChange(_tradeId, "Cancelled");
     }
 }

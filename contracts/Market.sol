@@ -34,7 +34,6 @@ contract Market {
         itemToken.transferFrom(msg.sender, address(this), _item);
         trades[tradeCounter] = Trade(msg.sender, _item, _price, "Open");
         tradeCounter++;
-        
         emit TradeStatusChange(tradeCounter - 1, "Open");
     }
 
@@ -44,7 +43,6 @@ contract Market {
         currencyToken.safeTransferFrom(msg.sender, trade.poster, trade.price);
         itemToken.transfer(msg.sender, trade.item);
         trades[_tradeId].status = "Executed";
-
         emit TradeStatusChange(_tradeId, "Executed");
     }
 
@@ -54,7 +52,6 @@ contract Market {
         require(trade.status == "Open", "Trade is not open.");
         itemToken.transfer(trade.poster, trade.item);
         trades[_tradeId].status = "Cancelled";
-
         emit TradeStatusChange(_tradeId, "Cancelled");
     }
 }
